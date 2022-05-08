@@ -2,6 +2,8 @@ from pickle import TRUE
 import bpy
 import math
 import random
+from mathutils import Vector
+from gpu_extras.batch import batch_for_shader
 
 bpy.context.object.name
 bpy.context.scene.transform_orientation_slots[2].type = 'LOCAL'
@@ -23,7 +25,7 @@ def ret_obb(verts):
 
     co_min = np.min(points_r, axis=0)
     co_max = np.max(points_r, axis=0)
-    
+
     xmin, xmax = co_min[0], co_max[0]
     ymin, ymax = co_min[1], co_max[1]
     zmin, zmax = co_min[2], co_max[2]
@@ -86,6 +88,33 @@ def acessableArea(object):
     for object in bpy.data.collections["furniture"].all_objects:
         object.select_set(True)
         bpy.ops.object.mode_set(mode = 'OBJECT')
+        verts = [v.co for v in object.data.vertices]
+        obb_local = ret_obb(verts)
+        mat = object.matrix_world
+        obb_world = [mat @ v for v in obb_local]
+
+        bpy.ops.object.mode_set(mode = 'EDIT')
+
+        # draw with GPU Module
+        coords = [(v[0], v[1], v[2]) for v in obb_world]
+
+        indices = (
+            (0, 1), (1, 2), (2, 3), (3, 0),
+            (4, 5), (5, 6), (6, 7), (7, 4),
+            (0, 4), (1, 5), (2, 6), (3, 7))
+
+        shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
+        batch = batch_for_shader(shader, 'LINES', {"pos": coords}, indices=indices)
+
+
+        def draw():
+            shader.bind()
+            shader.uniform_float("color", (1, 0, 0, 1))
+            batch.draw(shader)
+
+        bpy.types.SpaceView3D.draw_handler_add(draw, (), 'WINDOW', 'POST_VIEW')
+
+        bottom_poly = 
 
     # box = object.bound_box
     # p = [object.matrix_world @ Vector(corner) for corner in box]
