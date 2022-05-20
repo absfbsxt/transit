@@ -4,6 +4,7 @@ import math
 import random
 from mathutils import Vector
 from gpu_extras.batch import batch_for_shader
+import shapely.geometry
 
 bpy.context.object.name
 bpy.context.scene.transform_orientation_slots[2].type = 'LOCAL'
@@ -93,33 +94,134 @@ def acessableArea(object):
         mat = object.matrix_world
         obb_world = [mat @ v for v in obb_local]
 
-        bpy.ops.object.mode_set(mode = 'EDIT')
+        # Visualization
+        # bpy.ops.object.mode_set(mode = 'EDIT')
 
-        # draw with GPU Module
-        coords = [(v[0], v[1], v[2]) for v in obb_world]
+        # # draw with GPU Module
+        # coords = [(v[0], v[1], v[2]) for v in obb_world]
 
-        indices = (
-            (0, 1), (1, 2), (2, 3), (3, 0),
-            (4, 5), (5, 6), (6, 7), (7, 4),
-            (0, 4), (1, 5), (2, 6), (3, 7))
+        # indices = (
+        #     (0, 1), (1, 2), (2, 3), (3, 0),
+        #     (4, 5), (5, 6), (6, 7), (7, 4),
+        #     (0, 4), (1, 5), (2, 6), (3, 7))
 
-        shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
-        batch = batch_for_shader(shader, 'LINES', {"pos": coords}, indices=indices)
+        # shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
+        # batch = batch_for_shader(shader, 'LINES', {"pos": coords}, indices=indices)
 
 
-        def draw():
-            shader.bind()
-            shader.uniform_float("color", (1, 0, 0, 1))
-            batch.draw(shader)
+        # def draw():
+        #     shader.bind()
+        #     shader.uniform_float("color", (1, 0, 0, 1))
+        #     batch.draw(shader)
 
-        bpy.types.SpaceView3D.draw_handler_add(draw, (), 'WINDOW', 'POST_VIEW')
+        # bpy.types.SpaceView3D.draw_handler_add(draw, (), 'WINDOW', 'POST_VIEW')
 
-        bottom_poly = 
+        object["bottom_poly"] = [obb_world[0][0:2], obb_world[3][0:2], obb_world[4][0:2], obb_world[7][0:2]]
+        object["accessArea"] = *
 
     # box = object.bound_box
     # p = [object.matrix_world @ Vector(corner) for corner in box]
 
+def CheckIfHit(object_1, object_2):
+    """
+    Description:
+    check if object_1's bottom hit to object_2's bottom
 
+    Return:
+    True or False
+    """
+    temp_1 = object_1["bottom_poly"]
+    temp_2 = object_2["bottom_poly"]
+
+    obj_1_poly_context = {'type': 'MULTIPOLYGON',
+    'coordinates': [[[list(temp_1[0]), list(temp_1[1]), list(temp_1[2]), list(temp_1[3])]]]}
+    obj_2_poly_context = {'type': 'MULTIPOLYGON',
+    'coordinates': [[[list(temp_2[0]), list(temp_2[1]), list(temp_2[2]), list(temp_2[3])]]]}
+
+    obj_1_poly_shape = shapely.geometry.asShape(obj_1_poly_context)
+    obj_2_poly_shape = shapely.geometry.asShape(obj_2_poly_context)
+    return obj_1_poly_shape.intersects(obj_2_poly_shape)
+
+def CheckIntersect(object_1, object_2):
+    """
+    Description:
+    check if object_1's bottom in object_2's accessible area and return intersected point list
+
+    Return:
+    list of object_1's bottom points which intersected with object_2's access area
+    """
+
+    temp = object_2["accessArea"]
+    obj_2_poly_context = {'type': 'MULTIPOLYGON',
+    'coordinates': [[[list(temp[0]), list(temp[1]), list(temp[2]), list(temp[3])]]]}
+    obj_2_poly_shape = shapely.geometry.asShape(obj_2_poly_context)
+
+    intersectPoint = []
+
+    for i in object_1["bottom_poly"]:
+        i = shapely.geometry.Point(list(i))
+        if obj_2_poly_shape.intersects(i):
+            intersectPoint.append(i)
+        
+    if not list:
+        return False
+    elif list:
+        return intersectPoint
+    
+def select_from_collection(some_collection):
+    """ Recursively select objects from the specified collection """
+
+    list = []
+    for a_collection in some_collection.children:
+        select_from_collection(a_collection)
+    for obj in some_collection.objects:
+        obj.select_set(True)
+        list.append(obj)
+
+    return list
+
+def calc1(list, object_2):
+    """
+    Description:
+    Calculate the cost when A in B's access area but not hit with B
+
+    list:list of points in access area
+    """
+    temp = object_2["bottom_poly"]
+    obj_2_poly_context = {'type': 'MULTIPOLYGON',
+    'coordinates': [[[list(temp[0]), list(temp[1]), list(temp[2]), list(temp[3])]]]}
+    obj_2_poly_shape = shapely.geometry.asShape(obj_2_poly_context)
+    for i in list:
+        i = shapely.geometry.Point(list(i))
+        dis = obj_2_poly_shape.distance(i)
+
+def calc2():
+    """
+    Description:
+    Calculate the cost when A in B's access area and hit with B
+
+    """
+
+def costFunction(group):
+    list = select_from_collection(group)
+    for i in len(list):
+        for j in len(list)-i:
+            if i-1 != i-1+j:
+                # if A in B's access area:
+                if CheckIntersect(list[i-1], list[i-1+j]) != False:
+                    # if A not hit or cover B
+                    if CheckIfHit(list[i-1], list[i-1+j]) == False:
+                        Intersect_point_list = CheckIntersect(list[i-1], list[i-1+j])
+                        cost = calc1
+                    # if A hit or cover B
+                    else:
+                        cost = calc2
+                else:
+                    continue
+    
+    return cost
+        
+    
 
 def simulated_annealing(group_obj):
     """
